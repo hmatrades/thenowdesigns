@@ -7,7 +7,11 @@
   "scripts": {
     "dev": "vite-react-ssg dev",
     "build": "vite-react-ssg build",
-    "preview": "vite preview --port 4173 --host"
+    "preview": "vite preview --port 4173 --host",
+    "typecheck": "tsc --noEmit",
+    "worker:dev": "wrangler dev",
+    "worker:check": "wrangler deploy --dry-run",
+    "worker:test": "node --test worker/index.test.js"
   },
   "dependencies": {
     "@react-three/drei": "10.7.7",
@@ -27,6 +31,7 @@
     "@types/three": "^0.185.0",
     "@vitejs/plugin-react-swc": "4.3.1",
     "typescript": "^6.0.3",
-    "vite": "7.3.6"
+    "vite": "7.3.6",
+    "wrangler": "^4.113.0"
   }
 }

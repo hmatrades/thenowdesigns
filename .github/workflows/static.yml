@@ -35,7 +35,13 @@ jobs:
         run: npm run build
         env:
           VITE_SCAN_API_URL: ${{ vars.VITE_SCAN_API_URL }}
-          VITE_WHOP_REPAIR_URL: ${{ vars.VITE_WHOP_REPAIR_URL }}
+          VITE_CHECKOUT_MODE: ${{ vars.VITE_CHECKOUT_MODE }}
+          VITE_WHOP_TIER_1_URL: ${{ vars.VITE_WHOP_TIER_1_URL }}
+          VITE_WHOP_TIER_2_URL: ${{ vars.VITE_WHOP_TIER_2_URL }}
+          VITE_WHOP_TIER_3_URL: ${{ vars.VITE_WHOP_TIER_3_URL }}
+          VITE_WHOP_TIER_4_URL: ${{ vars.VITE_WHOP_TIER_4_URL }}
+          VITE_WHOP_TIER_5_URL: ${{ vars.VITE_WHOP_TIER_5_URL }}
+          VITE_PREVIEW_API_URL: ${{ vars.VITE_PREVIEW_API_URL }}
           VITE_WEB3FORMS_ACCESS_KEY: ${{ vars.VITE_WEB3FORMS_ACCESS_KEY }}
       - name: Setup Pages
         uses: actions/configure-pages@v5

@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "thenowdesigns-concept-preview",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-07-21",
+  "workers_dev": true,
+  "vars": {
+    "ALLOWED_ORIGINS": "https://thenowdesigns.com,https://www.thenowdesigns.com,http://localhost:4173,http://localhost:5173",
+    "OPENROUTER_MODEL": "openai/gpt-4.1-mini",
+    "OPENROUTER_REQUIRE_ZDR": "false"
+  },
+  "secrets": {
+    "required": ["OPENROUTER_API_KEY"]
+  },
+  "ratelimits": [
+    {
+      "name": "PREVIEW_RATE_LIMITER",
+      "namespace_id": "1721",
+      "simple": {
+        "limit": 2,
+        "period": 60
+      }
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

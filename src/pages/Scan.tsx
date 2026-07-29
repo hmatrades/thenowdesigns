@@ -1,6 +1,18 @@
-import { type CSSProperties, type FormEvent, useEffect, useRef, useState } from 'react'
+import { type CSSProperties, type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Head } from 'vite-react-ssg'
 import { Link } from 'react-router-dom'
+import ConceptPreview from '../components/ConceptPreview'
+import {
+  type PageBand,
+  PAGE_OPTIONS,
+  type RepairEstimate,
+  type RepairTierId,
+  type SitePlatform,
+  PLATFORM_OPTIONS,
+  estimateRepairs,
+  formatEstimateRange,
+  formatMoney,
+} from '../lib/repairEstimate'
 import { type ScanReport, ScanError, scanSite } from '../lib/siteScan'
 import '../styles/scan.css'
 
@@ -16,6 +28,41 @@ const SCAN_STAGES = [
 const WEB3FORMS_KEY =
   (import.meta.env.VITE_WEB3FORMS_ACCESS_KEY as string | undefined)?.trim() ||
   'cefe34f9-7266-4558-a8ee-f3a8ad09e6de'
+
+const CHECKOUT_MODE =
+  (import.meta.env.VITE_CHECKOUT_MODE as string | undefined)?.trim() === 'whop_waitlist'
+    ? 'whop_waitlist'
+    : 'scope_review'
+
+function validCheckoutUrl(value: string | undefined): string | null {
+  const candidate = value?.trim()
+  if (!candidate) return null
+  try {
+    const url = new URL(candidate)
+    const whopHost = url.hostname === 'whop.com' || url.hostname.endsWith('.whop.com')
+    return url.protocol === 'https:' && whopHost ? url.toString() : null
+  } catch {
+    return null
+  }
+}
+
+const CHECKOUT_URLS: Record<RepairTierId, string | null> = {
+  'website-tune-up': validCheckoutUrl(import.meta.env.VITE_WHOP_TIER_1_URL as string | undefined),
+  'repair-sprint': validCheckoutUrl(
+    (import.meta.env.VITE_WHOP_TIER_2_URL as string | undefined)
+      || (import.meta.env.VITE_WHOP_REPAIR_URL as string | undefined),
+  ),
+  'expanded-repair': validCheckoutUrl(import.meta.env.VITE_WHOP_TIER_3_URL as string | undefined),
+  'deep-repair': validCheckoutUrl(import.meta.env.VITE_WHOP_TIER_4_URL as string | undefined),
+  'major-remediation': validCheckoutUrl(import.meta.env.VITE_WHOP_TIER_5_URL as string | undefined),
+}
+
+function estimateReference(report: ScanReport): string {
+  const host = report.hostname.replace(/[^a-z\d]/gi, '').toUpperCase().slice(0, 8) || 'SITE'
+  const generated = Date.parse(report.scannedAt)
+  const stamp = (Number.isFinite(generated) ? generated : 0).toString(36).toUpperCase().slice(-7)
+  return `TND-${host}-${stamp}`
+}
 
 function scoreTone(score: number | null): string {
   if (score === null) return 'is-na'
@@ -38,12 +85,26 @@ function humanDate(value: string): string {
   }).format(new Date(value))
 }
 
-function RepairRequestForm({ report }: { report: ScanReport }) {
+function RepairRequestForm({
+  report,
+  estimate,
+  platform,
+  pages,
+}: {
+  report: ScanReport
+  estimate: RepairEstimate
+  platform: SitePlatform
+  pages: PageBand
+}) {
   const [sending, setSending] = useState(false)
   const [status, setStatus] = useState<{ type: '' | 'ok' | 'err'; message: string }>({
     type: '',
     message: '',
   })
+  const tier = estimate.tier
+  const reference = estimateReference(report)
+
+  if (!tier) return null
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -77,10 +138,17 @@ function RepairRequestForm({ report }: { report: ScanReport }) {
   return (
     <form className="scan-repair-form" onSubmit={onSubmit}>
       <input type="hidden" name="access_key" value={WEB3FORMS_KEY} />
-      <input type="hidden" name="subject" value={`Repair Sprint request — ${report.hostname}`} />
+      <input type="hidden" name="subject" value={`${tier.label} request — ${report.hostname}`} />
       <input type="hidden" name="from_name" value="The Now Designs website scanner" />
       <input type="hidden" name="Website" value={report.finalUrl} />
       <input type="hidden" name="Automated score" value={`${report.overall}/100`} />
+      <input type="hidden" name="Platform" value={platform} />
+      <input type="hidden" name="Approximate pages" value={pages} />
+      <input type="hidden" name="Preliminary estimate" value={formatEstimateRange(tier)} />
+      <input type="hidden" name="Recommended package" value={tier.label} />
+      <input type="hidden" name="Fixed price" value={formatMoney(tier.price)} />
+      <input type="hidden" name="Estimate effort points" value={estimate.effortPoints} />
+      <input type="hidden" name="Scan reference" value={reference} />
       <input
         type="hidden"
         name="Verified issues"
@@ -105,7 +173,7 @@ function RepairRequestForm({ report }: { report: ScanReport }) {
         </div>
       </div>
       <button type="submit" className="btn btn--cherry btn--lg scan-repair-form__button" disabled={sending}>
-        {sending ? 'Claiming your slot…' : 'Claim my Repair Sprint'} <span className="arrow">→</span>
+        {sending ? 'Claiming your slot…' : `Request ${tier.label}`} <span className="arrow">→</span>
       </button>
       <p className="scan-repair-form__note">No charge yet. We verify the scope first, then send the Whop checkout.</p>
       <p className={`scan-repair-form__status ${status.type}`} role="status" aria-live="polite">
@@ -116,42 +184,106 @@ function RepairRequestForm({ report }: { report: ScanReport }) {
 }
 
 function RepairOffer({ report }: { report: ScanReport }) {
-  const configuredWhopUrl = (import.meta.env.VITE_WHOP_REPAIR_URL as string | undefined)?.trim()
-  const whopUrl = configuredWhopUrl?.startsWith('https://') ? configuredWhopUrl : null
+  const [platform, setPlatform] = useState<SitePlatform | ''>('')
+  const [pages, setPages] = useState<PageBand | ''>('')
+  const estimate = useMemo(
+    () => (platform && pages ? estimateRepairs(report, platform, pages) : null),
+    [pages, platform, report],
+  )
+  const reference = estimateReference(report)
+  const whopUrl = CHECKOUT_MODE === 'whop_waitlist' && estimate?.tier && estimate.confidence === 'guided'
+    ? CHECKOUT_URLS[estimate.tier.id]
+    : null
 
   return (
     <section className="scan-offer" id="repair" aria-labelledby="repair-heading">
       <div className="scan-offer__copy">
-        <span className="scan-kicker">All done for you · fixed scope</span>
-        <h2 id="repair-heading">Turn the report into a repaired website.</h2>
+        <span className="scan-kicker">Measured scope · five fixed routes</span>
+        <h2 id="repair-heading">Turn the report into a priced repair plan.</h2>
         <p className="scan-offer__lead">
-          The Website Repair Sprint fixes the highest-impact verified leaks without turning into a
-          six-week redesign project.
+          Add two details we cannot learn from a public page. The estimator combines them with the
+          verified scan to select the closest fixed-scope route.
         </p>
         <ul className="scan-offer__list">
-          <li>One website, up to 10 core pages</li>
-          <li>Verified speed, accessibility, search, and trust fixes</li>
-          <li>Five-business-day repair window once access is ready</li>
+          <li>Five clear price levels from tune-up to rebuild</li>
+          <li>Severity, platform, and page-count adjusted</li>
+          <li>Verified speed, accessibility, search, and trust repairs</li>
           <li>Before-and-after scan with a clean handoff</li>
         </ul>
         <p className="scan-offer__boundary">
-          New pages, rebrands, copy rewrites, and app features are outside this sprint. If patching
-          is not the smart move, we’ll recommend a rebuild before payment.
+          This preliminary estimate extrapolates from the submitted page. New copy, brand work,
+          pages, integrations, and app features are excluded unless the selected route says otherwise.
+          Scope is confirmed before work begins.
         </p>
       </div>
       <div className="scan-offer__checkout">
-        <span className="scan-offer__eyebrow">Website Repair Sprint</span>
-        <div className="scan-offer__price"><sup>$</sup>1,500</div>
-        <p>One-time · scope confirmed before checkout</p>
-        {whopUrl ? (
-          <>
-            <a className="btn btn--cherry btn--lg scan-offer__button" href={whopUrl} target="_blank" rel="noopener">
-              Fix my verified leaks <span className="arrow">↗</span>
-            </a>
-            <span className="scan-offer__secure">Secure checkout powered by Whop</span>
-          </>
+        <span className="scan-offer__eyebrow">Preliminary repair estimate</span>
+        <div className="scan-estimator-fields">
+          <label className="scan-estimator-field">
+            <span>What is it built with?</span>
+            <select value={platform} onChange={(event) => setPlatform(event.target.value as SitePlatform)}>
+              <option value="">Choose a platform</option>
+              {PLATFORM_OPTIONS.map((option) => (
+                <option value={option.value} key={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="scan-estimator-field">
+            <span>How many core pages?</span>
+            <select value={pages} onChange={(event) => setPages(event.target.value as PageBand)}>
+              <option value="">Choose a range</option>
+              {PAGE_OPTIONS.map((option) => (
+                <option value={option.value} key={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {estimate?.tier ? (
+          <div className="scan-estimate" aria-live="polite">
+            <span className="scan-estimate__label">Estimated repair range</span>
+            <strong className="scan-estimate__range">{formatEstimateRange(estimate.tier)}</strong>
+            <div className="scan-estimate__route">
+              <span>Recommended fixed route</span>
+              <b>{estimate.tier.label}</b>
+              <strong>{formatMoney(estimate.tier.price)}</strong>
+            </div>
+            <div className="scan-estimate__drivers" aria-label="Estimate inputs">
+              {estimate.drivers.map((driver) => <span key={driver}>{driver}</span>)}
+            </div>
+            <p className="scan-estimate__summary">{estimate.tier.summary}</p>
+            {estimate.confidence === 'manual-review' ? (
+              <p className="scan-estimate__review">This route needs a scope check before payment because the selected site is large or structurally complex.</p>
+            ) : null}
+            {whopUrl ? (
+              <>
+                <a className="btn btn--cherry btn--lg scan-offer__button" href={whopUrl} target="_blank" rel="noopener noreferrer">
+                  Request approval · {formatMoney(estimate.tier.price)} <span className="arrow">↗</span>
+                </a>
+                <span className="scan-offer__secure">
+                  Whop approval request · use scan reference <b>{reference}</b> · no charge unless the scope is approved
+                </span>
+              </>
+            ) : (
+              <RepairRequestForm
+                report={report}
+                estimate={estimate}
+                platform={platform as SitePlatform}
+                pages={pages as PageBand}
+              />
+            )}
+          </div>
+        ) : estimate ? (
+          <div className="scan-estimate-pending is-clean" aria-live="polite">
+            <strong>No verified technical repair to price from this page.</strong>
+            <p>The automated fundamentals passed. A human conversion review can still evaluate the offer, proof, messaging, and buyer journey.</p>
+            <Link className="btn btn--ghost scan-offer__button" to="/#contact">Request a human review <span className="arrow">→</span></Link>
+          </div>
         ) : (
-          <RepairRequestForm report={report} />
+          <div className="scan-estimate-pending" aria-live="polite">
+            <strong>Your live scan already supplied the technical evidence.</strong>
+            <p>Choose a platform and page range to reveal the preliminary cost and matching repair route.</p>
+          </div>
         )}
         <p className="scan-offer__rebuild">
           Need more than repairs? <Link to="/#contact">Full rebuilds start at $4,500 →</Link>
@@ -420,14 +552,14 @@ export default function Scan() {
                   <h2>{report.issues.length ? `${report.issues.length} leaks worth fixing.` : 'No automated red flags.'}</h2>
                 </div>
                 <p>
-                  Ranked by likely impact on attention, usability, search, and trust—not by made-up
-                  dollar values.
+                  Ranked by likely impact on attention, usability, search, and trust—not by invented
+                  revenue-loss claims. {report.issues.length > 8 ? 'The eight highest-impact findings are shown; every verified issue is included in the estimate.' : ''}
                 </p>
               </div>
 
               {report.issues.length ? (
                 <div className="scan-issue-list">
-                  {report.issues.map((issue, index) => (
+                  {report.issues.slice(0, 8).map((issue, index) => (
                     <article className={`scan-issue is-${issue.severity}`} key={issue.id}>
                       <div className="scan-issue__rank">{String(index + 1).padStart(2, '0')}</div>
                       <div className="scan-issue__body">
@@ -462,6 +594,8 @@ export default function Scan() {
             </div>
           </section>
 
+          <ConceptPreview report={report} />
+
           <div className="wrap scan-offer-wrap">
             <RepairOffer report={report} />
           </div>
@@ -482,6 +616,11 @@ export default function Scan() {
                   Automated tools cannot know whether your offer is compelling, whether the right
                   proof appears at the right moment, or how many sales you lost. We do not pretend
                   they can. Those questions require a human conversion review.
+                </p>
+                <p>
+                  The preliminary repair estimate combines the verified issue severity and category
+                  with your selected platform and page range. It maps that effort to one of five fixed
+                  routes; access and final scope are still confirmed before work begins.
                 </p>
                 <small>
                   Lighthouse versions and lab conditions change, so scores can vary between runs.

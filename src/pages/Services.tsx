@@ -179,12 +179,12 @@ export default function Services() {
       <section className="sec budget" id="pricing">
         <div className="wrap budget__wrap">
           <span className="eyebrow" data-reveal>What it costs</span>
-          <KineticHeading as="h2" className="budget__head" segments={[{ text: 'We cater to ' }, { text: 'your budget.', em: true }]} />
+          <KineticHeading as="h2" className="budget__head" segments={[{ text: 'Clear prices for repairs. ' }, { text: 'Custom scope for builds.', em: true }]} />
           <p className="budget__line" data-reveal data-d="1">
-            Most studios hide prices — that's the overhead talking. Tell us your number and we'll
-            build the best site it can buy. No tiers, no games, and you own everything when it ships.
+            Fixed repair routes keep contained technical work predictable. Full builds are still
+            scoped around your goals, constraints, and budget—and you own everything when it ships.
           </p>
-          <div data-reveal data-d="2"><HashLink to="/#contact" className="btn btn--cherry btn--lg">Tell us your budget <span className="arrow">→</span></HashLink></div>
+          <div data-reveal data-d="2"><HashLink to="/#contact" className="btn btn--cherry btn--lg">Plan my project <span className="arrow">→</span></HashLink></div>
         </div>
       </section>
 

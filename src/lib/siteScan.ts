@@ -468,7 +468,9 @@ function buildReport(payload: unknown, requestedUrl: string): ScanReport {
     overall,
     verdict: reportVerdict(overall, issues.length),
     categories: categoryResults,
-    issues: issues.slice(0, 8),
+    // Keep every verified issue in the report so the repair estimator cannot
+    // underquote. The UI limits the visible list separately.
+    issues,
     wins: wins.filter((win, index, all) => all.findIndex((item) => item.label === win.label) === index).slice(0, 5),
   }
 }

@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "hostname": "thenowdesigns.com",
+  "title": "The Now Designs — Websites built for clarity and action",
+  "description": "A design studio creating distinctive websites for growing businesses.",
+  "direction": "clean",
+  "categories": [
+    { "key": "speed", "score": 80 },
+    { "key": "accessibility", "score": 95 },
+    { "key": "search", "score": 100 },
+    { "key": "trust", "score": 100 }
+  ],
+  "issues": [
+    {
+      "category": "speed",
+      "title": "The page locks up while loading",
+      "impact": "Buttons and menus can feel unresponsive exactly when a visitor tries them.",
+      "fix": "Split heavy scripts and defer nonessential code.",
+      "evidence": "Measured total blocking time"
+    },
+    {
+      "category": "accessibility",
+      "title": "Some text is harder to read",
+      "impact": "Low contrast can hide important messaging from some visitors.",
+      "fix": "Raise contrast while preserving the brand palette.",
+      "evidence": "Three instances detected"
+    }
+  ]
+}

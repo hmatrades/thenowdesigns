@@ -2,6 +2,12 @@
 node_modules
 dist
 *.local
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+.wrangler/
 
 # editor / os
 .DS_Store
