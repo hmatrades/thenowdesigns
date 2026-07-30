@@ -3,6 +3,9 @@ node_modules
 dist
 *.local
 
+# generated daily briefs (engine output; the Action publishes them as artifacts)
+engine/briefs/
+
 # editor / os
 .DS_Store
 .gstack/

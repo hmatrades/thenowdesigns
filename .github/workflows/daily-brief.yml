@@ -1,0 +1,42 @@
+# Daily virality brief: runs the prediction engine every morning, publishes
+# the brief to the run's job summary and as a downloadable artifact.
+# Deliberately does NOT commit to the repo — main deploys the live site on
+# every push, and a daily bot commit would mean a daily deploy.
+name: Daily virality brief
+
+on:
+  schedule:
+    # 11:00 UTC = 7:00 am ET — brief is ready before the workday.
+    - cron: '0 11 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate brief
+        run: npm run --silent engine:daily > /dev/null
+
+      - name: Publish to job summary
+        run: cat engine/briefs/latest.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload brief artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: virality-brief-${{ github.run_id }}
+          path: engine/briefs/
+          retention-days: 30
